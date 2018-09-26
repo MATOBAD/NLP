@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 import sys
 import numpy as np
-from util import preprocess, create_co_matrix, cos_similarity, ppmi
+from common.util import preprocess, create_co_matrix, cos_similarity, ppmi
 
 
 def main():

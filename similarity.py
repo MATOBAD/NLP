@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 import sys
-from util import preprocess, create_co_matrix, most_similar
+from common.util import preprocess, create_co_matrix, most_similar
 
 
 def main():

@@ -2,7 +2,7 @@
 import sys
 import numpy as np
 import matplotlib.pyplot as plt
-from util import preprocess, create_co_matrix, ppmi
+from common.util import preprocess, create_co_matrix, ppmi
 
 
 def main():
