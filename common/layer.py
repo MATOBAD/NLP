@@ -107,7 +107,7 @@ class Embedding:
 
     # 逆伝播
     def backward(self, dout):
-        dW = self.grads
+        dW, = self.grads
         dW[...] = 0
 
         for i, word_in in enumerate(self.idx):
