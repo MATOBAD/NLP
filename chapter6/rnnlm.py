@@ -1,4 +1,6 @@
-from time_layers import *
+import sys
+sys.path.append('..')
+from common.time_layers import *
 import pickle
 
 
@@ -22,14 +24,14 @@ class Rnnlm:
             TimeAffine(affine_W, affine_b)
         ]
         self.loss_layer = TimeSoftmaxWithLoss()
-        self.lstm_layer = self.laeyrs[1]
+        self.lstm_layer = self.layers[1]
 
         # 全ての重みと勾配をリストにまとめる
         self.params, self.grads = [], []
         for layer in self.layers:
             self.params += layer.params
             self.grads += layer.grads
-    
+
     def predict(self, xs):
         for layer in self.layers:
             xs = layer.forward(xs)
