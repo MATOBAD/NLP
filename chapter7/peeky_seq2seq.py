@@ -3,6 +3,7 @@
 import sys
 sys.path.append('..')
 import numpy as np
+from seq2seq import Seq2seq
 from common.time_layers import TimeEmbedding, TimeLSTM, TimeAffine,\
     TimeSoftmaxWithLoss
 from common.base_model import BaseModel
@@ -47,16 +48,16 @@ class Encoder:
         return dout
 
 
-class Decoder:
+class PeekyDecoder:
     def __init__(self, vocab_size, wordvec_size, hidden_size):
         V, D, H = vocab_size, wordvec_size, hidden_size
         rn = np.random.randn
 
         embed_W = (rn(V, D) / 100).astype('f')
-        lstm_Wx = (rn(D, 4 * H) / np.sqrt(D)).astype('f')
+        lstm_Wx = (rn(H + D, 4 * H) / np.sqrt(H + D)).astype('f')
         lstm_Wh = (rn(H, 4 * H) / np.sqrt(H)).astype('f')
         lstm_b = np.zeros(4 * H).astype('f')
-        affine_W = (rn(H, V) / np.sqrt(H)).astype('f')
+        affine_W = (rn(H + H, V) / np.sqrt(H + H)).astype('f')
         affine_b = np.zeros(V).astype('f')
 
         self.embed = TimeEmbedding(embed_W)
@@ -68,20 +69,36 @@ class Decoder:
         for layer in (self.embed, self.lstm, self.affine):
             self.params += layer.params
             self.grads += layer.grads
+        self.cache = None
 
     def forward(self, xs, h):
+        N, T = xs.shape
+        N, H = h.shape
+
         self.lstm.set_state(h)
 
         out = self.embed.forward(xs)
+        hs = np.repeat(h, T, axis=0).reshape(N, T, H)
+        out = np.concatenate((hs, out), axis=2)
+
         out = self.lstm.forward(out)
+        out = np.concatenate((hs, out), axis=2)
+
         score = self.affine.forward(out)
+        self.cache = H
         return score
 
     def backward(self, dscore):
+        H = self.cache
+
         dout = self.affine.backward(dscore)
+        dout, dhs0 = dout[:, :, H:], dout[:, :, :H]
         dout = self.lstm.backward(dout)
-        dout = self.embed.backward(dout)
-        dh = self.lstm.dh
+        dembed, dhs1 = dout[:, :, H:], dout[:, :, :H]
+        self.embed.backward(dembed)
+
+        dhs = dhs0 + dhs1
+        dh = self.lstm.dh + np.sum(dhs, axis=1)
         return dh
 
     def generate(self, h, start_id, sample_size):
@@ -106,31 +123,12 @@ class Decoder:
         return sampled
 
 
-class Seq2seq(BaseModel):
+class PeekySeq2seq(Seq2seq):
     def __init__(self, vocab_size, wordvec_size, hidden_size):
         V, D, H = vocab_size, wordvec_size, hidden_size
         self.encoder = Encoder(V, D, H)
-        self.decoder = Decoder(V, D, H)
+        self.decoder = PeekyDecoder(V, D, H)
         self.softmax = TimeSoftmaxWithLoss()
 
         self.params = self.encoder.params + self.decoder.params
         self.grads = self.encoder.grads + self.decoder.grads
-
-    def forward(self, xs, ts):
-        decoder_xs, decoder_ts = ts[:, :-1], ts[:, 1:]
-
-        h = self.encoder.forward(xs)
-        score = self.decoder.forward(decoder_xs, h)
-        loss = self.softmax.forward(score, decoder_ts)
-        return loss
-
-    def backward(self, dout=1):
-        dout = self.softmax.backward(dout)
-        dh = self.decoder.backward(dout)
-        dout = self.encoder.backward(dh)
-        return dout
-
-    def generate(self, xs, start_id, sample_size):
-        h = self.encoder.forward(xs)
-        sampled = self.decoder.generate(h, start_id, sample_size)
-        return sampled
